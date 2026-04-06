@@ -5,7 +5,7 @@
 *.so
 *.dylib
 bin/
-server
+/server
 lyncis-backend
 
 # Test binary, built with `go test -c`
