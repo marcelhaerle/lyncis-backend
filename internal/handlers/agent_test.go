@@ -19,6 +19,7 @@ import (
 
 	"github.com/marcelhaerle/lyncis-backend/internal/database"
 	"github.com/marcelhaerle/lyncis-backend/internal/handlers"
+	"github.com/marcelhaerle/lyncis-backend/internal/middleware"
 	"github.com/marcelhaerle/lyncis-backend/internal/models"
 )
 
@@ -64,8 +65,8 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to connect to test database: %v", err)
 	}
 
-	// Auto-migrate the Agent model
-	if err := db.AutoMigrate(&models.Agent{}); err != nil {
+	// Auto-migrate the models
+	if err := db.AutoMigrate(&models.Agent{}, &models.Task{}); err != nil {
 		log.Fatalf("failed to migrate test database: %v", err)
 	}
 
@@ -75,7 +76,14 @@ func TestMain(m *testing.M) {
 
 	// Setup Fiber App for routing
 	testApp = fiber.New()
-	testApp.Post("/api/v1/agent/register", handlers.RegisterAgent)
+
+	api := testApp.Group("/api/v1")
+	agentGroup := api.Group("/agent")
+	agentGroup.Post("/register", handlers.RegisterAgent)
+
+	authGroup := api.Group("/agent", middleware.AgentAuth)
+	authGroup.Get("/tasks/pending", handlers.GetPendingTask)
+	authGroup.Post("/tasks/:task_id/complete", handlers.CompleteTask)
 
 	os.Exit(m.Run())
 }

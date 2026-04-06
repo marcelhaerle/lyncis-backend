@@ -29,7 +29,8 @@ func Connect() {
 	// Auto-migrate tables
 	err = db.AutoMigrate(
 		&models.Agent{},
-		// Additional models like Task, Scan, ScanFinding will be added here
+		&models.Task{},
+		// Additional models like Scan, ScanFinding will be added here
 	)
 	if err != nil {
 		log.Fatalf("Failed to run database migrations: %v", err)
