@@ -66,7 +66,12 @@ func TestMain(m *testing.M) {
 	}
 
 	// Auto-migrate the models
-	if err := db.AutoMigrate(&models.Agent{}, &models.Task{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.Agent{},
+		&models.Task{},
+		&models.Scan{},
+		&models.ScanFinding{},
+	); err != nil {
 		log.Fatalf("failed to migrate test database: %v", err)
 	}
 
@@ -84,6 +89,12 @@ func TestMain(m *testing.M) {
 	authGroup := api.Group("/agent", middleware.AgentAuth)
 	authGroup.Get("/tasks/pending", handlers.GetPendingTask)
 	authGroup.Post("/tasks/:task_id/complete", handlers.CompleteTask)
+
+	uiGroup := api.Group("/ui")
+	uiGroup.Get("/dashboard", handlers.GetDashboard)
+	uiGroup.Get("/agents", handlers.GetAgents)
+	uiGroup.Post("/agents/:agent_id/scan", handlers.TriggerScan)
+	uiGroup.Get("/agents/:agent_id/scans/latest", handlers.GetLatestScan)
 
 	os.Exit(m.Run())
 }

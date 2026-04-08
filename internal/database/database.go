@@ -30,7 +30,8 @@ func Connect() {
 	err = db.AutoMigrate(
 		&models.Agent{},
 		&models.Task{},
-		// Additional models like Scan, ScanFinding will be added here
+		&models.Scan{},
+		&models.ScanFinding{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to run database migrations: %v", err)
