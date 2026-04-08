@@ -44,7 +44,7 @@ func RegisterAgent(c *fiber.Ctx) error {
 	// Lookup agent by hostname
 	var existingAgent models.Agent
 	result := db.Where("hostname = ?", req.Hostname).First(&existingAgent)
-	
+
 	if result.Error == nil {
 		// Agent already exists: enforce trust on first use securely
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
@@ -59,7 +59,7 @@ func RegisterAgent(c *fiber.Ctx) error {
 
 	// Agent does not exist: generate a secure raw token
 	rawToken := uuid.New().String()
-	
+
 	// Hash the raw token for secure DB storage
 	hash := sha256.Sum256([]byte(rawToken))
 	tokenHash := hex.EncodeToString(hash[:])

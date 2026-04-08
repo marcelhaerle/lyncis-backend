@@ -44,6 +44,12 @@ func main() {
 	authAgentGroup.Get("/tasks/pending", handlers.GetPendingTask)
 	authAgentGroup.Post("/tasks/:task_id/complete", handlers.CompleteTask)
 
+	uiGroup := api.Group("/ui")
+	uiGroup.Get("/dashboard", handlers.GetDashboard)
+	uiGroup.Get("/agents", handlers.GetAgents)
+	uiGroup.Post("/agents/:agent_id/scan", handlers.TriggerScan)
+	uiGroup.Get("/agents/:agent_id/scans/latest", handlers.GetLatestScan)
+
 	// Port configuration
 	port := os.Getenv("PORT")
 	if port == "" {
