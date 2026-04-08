@@ -43,6 +43,7 @@ func main() {
 	authAgentGroup := api.Group("/agent", middleware.AgentAuth)
 	authAgentGroup.Get("/tasks/pending", handlers.GetPendingTask)
 	authAgentGroup.Post("/tasks/:task_id/complete", handlers.CompleteTask)
+	authAgentGroup.Post("/scans", handlers.SaveScan)
 
 	uiGroup := api.Group("/ui")
 	uiGroup.Get("/dashboard", handlers.GetDashboard)
