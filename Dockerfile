@@ -1,11 +1,11 @@
 # Stage 1: Build the Go binary
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 
 # Set the working directory inside the container
 WORKDIR /app
 
 # Install git and ca-certificates (needed for fetching dependencies and HTTPS calls to DB/external services)
-RUN apk add --no-cache git ca-certificates tzdata update-ca-certificates
+RUN apk add --no-cache git ca-certificates tzdata
 
 # Copy go.mod and go.sum to leverage Docker cache for dependencies
 COPY go.mod go.sum ./
