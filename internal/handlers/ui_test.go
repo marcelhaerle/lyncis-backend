@@ -148,6 +148,18 @@ func TestGetAgents(t *testing.T) {
 	}
 	testDB.Create(olderScan)
 
+	// Test tasks for activity status
+	// Agent 1 has a running task
+	taskID := uuid.New()
+	task := &models.Task{
+		ID:        taskID,
+		AgentID:   agentID,
+		Command:   "run_lynis",
+		Status:    "running",
+		CreatedAt: time.Now(),
+	}
+	testDB.Create(task)
+
 	req := httptest.NewRequest("GET", "/api/v1/ui/agents", nil)
 	resp, _ := testApp.Test(req, -1)
 
@@ -171,6 +183,9 @@ func TestGetAgents(t *testing.T) {
 	}
 	if agents[0].LatestScanAt == nil {
 		t.Errorf("expected latest_scan_at to not be nil")
+	}
+	if agents[0].ActivityStatus != "scanning" {
+		t.Errorf("expected activity_status to be scanning, got %s", agents[0].ActivityStatus)
 	}
 }
 
@@ -201,6 +216,15 @@ func TestTriggerScan(t *testing.T) {
 	}
 	if task.Status != "pending" {
 		t.Errorf("expected status pending, got %s", task.Status)
+	}
+
+	// Trigger second scan to test conflict
+	req2 := httptest.NewRequest("POST", "/api/v1/ui/agents/"+agentID.String()+"/scan", bytes.NewBuffer([]byte{}))
+	req2.Header.Set("Content-Type", "application/json")
+	resp2, _ := testApp.Test(req2, -1)
+
+	if resp2.StatusCode != http.StatusConflict {
+		t.Fatalf("expected status 409 conflict, got %d", resp2.StatusCode)
 	}
 }
 

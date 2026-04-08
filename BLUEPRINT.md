@@ -186,3 +186,24 @@ Create unit and integration tests where possible. Document the code and implemen
   3. Implement a data table fetching from the new backend endpoint.
   4. **Table Columns:** Hostname (clickable, linking to the agent's report), Test ID, Description, Severity.
   5. Add local filtering to the table (e.g., a search bar to filter by Description or Hostname).
+
+#### Feature 11: Real-Time Agent Activity Status & Task Throttling
+
+* **Repository:** `lyncis-backend` & `lyncis-ui`
+* **Goal:** Visually indicate if an agent is currently executing a scan or has one queued, and prevent users from spamming the "Trigger Scan" button for busy agents.
+* **Backend Tasks:**
+  1. **Modify Response Model:** Update the agent response struct for GET /api/v1/ui/agents to include a new field: `activity_status` (string: `'idle'`, `'pending'`, `'scanning'`).
+  2. **Update Query Logic:** In the `GET /api/v1/ui/agents` handler, execute a `LEFT JOIN` or subquery against the `tasks` table to check for active tasks for each agent.
+      * If a task exists with `status='running'`, set `activity_status = 'scanning'`.
+      * If a task exists with `status='pending'`, set `activity_status = 'pending'`.
+      * Otherwise, set `activity_status = 'idle'`.
+  3. **Backend Validation (Safety Net):** Update the `POST /api/v1/ui/agents/{agent_id}/scan` endpoint to reject the request (e.g., HTTP 409 Conflict) if the agent already has a task in `pending` or `running` state.
+* **UI Tasks:**
+  1. **Agent Table Update:** Add a new column or an icon next to the Agent's name in the `/agents` list representing the `activity_status`.
+      * `'idle'`: Empty or a subtle checkmark.
+      * `'pending'`: An hourglass icon or a pulsing "Queued" badge.
+      * `'scanning'`: An animated spinner (using `lucide-react'`s `Loader2` with `animate-spin` class) and a "Scanning..." badge.
+  2. **Button State:** Update the "Trigger Scan" button logic in the table.
+      * Set `disabled={agent.activity_status !== 'idle'}`.
+      * Apply styling changes (e.g., lower opacity, cursor-not-allowed) when disabled.
+  3. **Tooltip/Feedback:** Add a tooltip over the disabled button that explains: *"A scan is already scheduled or in progress for this agent."*

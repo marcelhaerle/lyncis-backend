@@ -24,6 +24,7 @@ type UIAgent struct {
 	Online               bool       `json:"online"`
 	LatestHardeningIndex *int       `json:"latest_hardening_index"`
 	LatestScanAt         *time.Time `json:"latest_scan_at"`
+	ActivityStatus       string     `json:"activity_status"`
 }
 
 // agentWithScan is used for mapping the DB query joining agents and their latest scan
@@ -31,6 +32,7 @@ type agentWithScan struct {
 	models.Agent
 	LatestHardeningIndex *int       `gorm:"column:latest_hardening_index"`
 	LatestScanAt         *time.Time `gorm:"column:latest_scan_at"`
+	ActivityStatus       string     `gorm:"column:activity_status"`
 }
 
 // GetDashboard returns aggregated statistics for the UI dashboard
@@ -73,7 +75,14 @@ func GetAgents(c *fiber.Ctx) error {
 
 	// Use a LEFT JOIN with a subquery that retrieves the latest scan per agent using DISTINCT ON (agent_id)
 	query := `
-		SELECT agents.*, latest_scans.hardening_index AS latest_hardening_index, latest_scans.created_at AS latest_scan_at
+		SELECT agents.*, 
+		       latest_scans.hardening_index AS latest_hardening_index, 
+		       latest_scans.created_at AS latest_scan_at,
+		       CASE
+		           WHEN EXISTS (SELECT 1 FROM tasks WHERE agent_id = agents.id AND status = 'running') THEN 'scanning'
+		           WHEN EXISTS (SELECT 1 FROM tasks WHERE agent_id = agents.id AND status = 'pending') THEN 'pending'
+		           ELSE 'idle'
+		       END AS activity_status
 		FROM agents
 		LEFT JOIN (
 			SELECT DISTINCT ON (agent_id) agent_id, hardening_index, created_at
@@ -97,6 +106,7 @@ func GetAgents(c *fiber.Ctx) error {
 			Online:               r.Agent.LastSeen.After(timeThreshold),
 			LatestHardeningIndex: r.LatestHardeningIndex,
 			LatestScanAt:         r.LatestScanAt,
+			ActivityStatus:       r.ActivityStatus,
 		}
 	}
 
@@ -118,6 +128,20 @@ func TriggerScan(c *fiber.Ctx) error {
 	if err := database.DB.First(&agent, "id = ?", agentID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Agent not found",
+		})
+	}
+
+	// Check if a scan is already running or pending
+	var activeTaskCount int64
+	if err := database.DB.Model(&models.Task{}).Where("agent_id = ? AND status IN ?", agentID, []string{"pending", "running"}).Count(&activeTaskCount).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to check agent status",
+		})
+	}
+
+	if activeTaskCount > 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "A scan is already scheduled or in progress for this agent",
 		})
 	}
 
