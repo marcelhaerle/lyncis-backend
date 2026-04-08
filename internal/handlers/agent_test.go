@@ -95,6 +95,7 @@ func TestMain(m *testing.M) {
 	uiGroup.Get("/agents", handlers.GetAgents)
 	uiGroup.Post("/agents/:agent_id/scan", handlers.TriggerScan)
 	uiGroup.Get("/agents/:agent_id/scans/latest", handlers.GetLatestScan)
+	uiGroup.Get("/findings", handlers.GetFindings)
 
 	os.Exit(m.Run())
 }

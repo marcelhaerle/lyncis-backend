@@ -260,3 +260,117 @@ func TestGetLatestScan(t *testing.T) {
 		t.Errorf("expected 1 finding, got %d", len(res.Findings))
 	}
 }
+
+func TestGetFindings(t *testing.T) {
+	// Clean DB state
+	testDB.Exec("TRUNCATE TABLE scan_findings, scans, tasks, agents RESTART IDENTITY CASCADE")
+
+	agent1ID := uuid.New()
+
+	// Agent 1
+	agent1 := &models.Agent{
+		ID:            agent1ID,
+		Hostname:      "ui-agent-01",
+		OSInfo:        "Debian 12",
+		Status:        "online",
+		LastSeen:      time.Now(),
+		AuthTokenHash: "hash1",
+	}
+	testDB.Create(agent1)
+
+	// Agent 1 - Old Scan
+	oldScanID := uuid.New()
+	oldScan := &models.Scan{
+		ID:             oldScanID,
+		AgentID:        agent1ID,
+		HardeningIndex: 50,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-10 * time.Minute),
+	}
+	testDB.Create(oldScan)
+
+	// Find in old scan (should NOT be returned)
+	testDB.Create(&models.ScanFinding{
+		ID:          uuid.New(),
+		ScanID:      oldScanID,
+		AgentID:     agent1ID,
+		Severity:    "warning",
+		TestID:      "TEST-OLD",
+		Description: "Old issue",
+	})
+
+	// Agent 1 - Latest Scan
+	latestScanID := uuid.New()
+	latestScan := &models.Scan{
+		ID:             latestScanID,
+		AgentID:        agent1ID,
+		HardeningIndex: 80,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-1 * time.Minute),
+	}
+	testDB.Create(latestScan)
+
+	// Findings in latest scan (SHOULD be returned)
+	warningID := uuid.New()
+	testDB.Create(&models.ScanFinding{
+		ID:          warningID,
+		ScanID:      latestScanID,
+		AgentID:     agent1ID,
+		Severity:    "warning",
+		TestID:      "TEST-LATEST-WARN",
+		Description: "New issue",
+	})
+	testDB.Create(&models.ScanFinding{
+		ID:          uuid.New(),
+		ScanID:      latestScanID,
+		AgentID:     agent1ID,
+		Severity:    "suggestion",
+		TestID:      "TEST-SUGG",
+		Description: "New suggestion",
+	})
+
+	t.Run("Filter by severity=warning", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/v1/ui/findings?severity=warning", nil)
+		resp, _ := testApp.Test(req, -1)
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var res []handlers.UIFinding
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		// Should only return 1 warning from the LATEST scan
+		if len(res) != 1 {
+			t.Fatalf("expected 1 finding, got %d", len(res))
+		}
+
+		if res[0].FindingID != warningID {
+			t.Errorf("expected finding ID %s, got %s", warningID.String(), res[0].FindingID.String())
+		}
+		if res[0].Severity != "warning" {
+			t.Errorf("expected severity 'warning', got %s", res[0].Severity)
+		}
+	})
+
+	t.Run("No filter", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/v1/ui/findings", nil)
+		resp, _ := testApp.Test(req, -1)
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var res []handlers.UIFinding
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		// Should return 2 findings (warning + suggestion) from the LATEST scan
+		if len(res) != 2 {
+			t.Fatalf("expected 2 findings, got %d", len(res))
+		}
+	})
+}

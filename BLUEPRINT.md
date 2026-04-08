@@ -172,3 +172,17 @@ Create unit and integration tests where possible. Document the code and implemen
   1. On the `/dashboard` route, add a new section below the KPI cards (e.g., "Agent Posture Overview").
   2. Display a compact list or a horizontal bar chart (using `recharts` or native Tailwind widths) plotting the `hostname` against their `latest_hardening_index`.
   3. Apply color-coding to the indices (e.g., Red for < 50, Yellow for 50-75, Green for > 75) following the Sci-Fi theme (`#ef4444`, `#eab308`, `#10b981` mixed with the dark surface colors).
+
+### Feature 10: Global Critical Warnings View
+
+* **Repository:** `lyncis-backend` & `lyncis-ui`
+* **Goal:** Create an actionable to-do list for administrators by aggregating all critical warnings across the entire infrastructure into one view, accessible directly from the dashboard.
+* **Backend Tasks:**
+  1. **New Endpoint:** Create `GET /api/v1/ui/findings`.
+  2. **Logic:** Support query parameters like `?severity=warning`. The query must join the `scan_findings`, `scans`, and `agents` tables to return a flat list containing: `finding_id`, `severity`, `test_id`, `description`, `agent_id`, `hostname`, and `scan_date`. Filter this to only include findings from the latest scan of each agent to avoid showing historical, already-fixed issues.
+* **UI Tasks:**
+  1. Convert the "Critical Warnings" KPI card on the `/dashboard` into a clickable link (`<Link to="/findings?severity=warning">`).
+  2. Create a new route: `/findings`.
+  3. Implement a data table fetching from the new backend endpoint.
+  4. **Table Columns:** Hostname (clickable, linking to the agent's report), Test ID, Description, Severity.
+  5. Add local filtering to the table (e.g., a search bar to filter by Description or Hostname).

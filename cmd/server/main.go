@@ -55,6 +55,7 @@ func main() {
 	uiGroup.Get("/agents", handlers.GetAgents)
 	uiGroup.Post("/agents/:agent_id/scan", handlers.TriggerScan)
 	uiGroup.Get("/agents/:agent_id/scans/latest", handlers.GetLatestScan)
+	uiGroup.Get("/findings", handlers.GetFindings)
 
 	// Port configuration
 	port := os.Getenv("PORT")

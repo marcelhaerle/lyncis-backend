@@ -51,8 +51,18 @@ func GetDashboard(c *fiber.Ctx) error {
 	database.DB.Model(&models.Scan{}).Select("COALESCE(AVG(hardening_index), 0) as avg").Scan(&avgHardening)
 	stats.AvgHardeningIndex = math.Round(avgHardening.Avg)
 
-	// Critical Warnings count
-	database.DB.Model(&models.ScanFinding{}).Where("severity = ?", "warning").Count(&stats.CriticalWarnings)
+	// Critical Warnings count from latest scans
+	warningQuery := `
+		SELECT COUNT(*) 
+		FROM scan_findings f
+		INNER JOIN (
+			SELECT DISTINCT ON (agent_id) id
+			FROM scans
+			ORDER BY agent_id, created_at DESC
+		) latest_scans ON f.scan_id = latest_scans.id
+		WHERE f.severity = 'warning'
+	`
+	database.DB.Raw(warningQuery).Scan(&stats.CriticalWarnings)
 
 	return c.JSON(stats)
 }
@@ -150,4 +160,61 @@ func GetLatestScan(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(scan)
+}
+
+// UIFinding represents a flat structure for displaying findings with agent details in the UI
+type UIFinding struct {
+	FindingID   uuid.UUID `json:"finding_id"`
+	Severity    string    `json:"severity"`
+	TestID      string    `json:"test_id"`
+	Description string    `json:"description"`
+	AgentID     uuid.UUID `json:"agent_id"`
+	Hostname    string    `json:"hostname"`
+	ScanDate    time.Time `json:"scan_date"`
+}
+
+// GetFindings returns an aggregated list of findings from the latest scan of each agent
+func GetFindings(c *fiber.Ctx) error {
+	var findings []UIFinding
+	severityFilter := c.Query("severity")
+
+	// Base query to get findings from the latest scan for each agent, joining with agents and scans
+	query := `
+		SELECT 
+			f.id as finding_id, 
+			f.severity, 
+			f.test_id, 
+			f.description, 
+			a.id as agent_id, 
+			a.hostname, 
+			s.created_at as scan_date
+		FROM scan_findings f
+		INNER JOIN (
+			SELECT DISTINCT ON (agent_id) id, agent_id, created_at
+			FROM scans
+			ORDER BY agent_id, created_at DESC
+		) s ON f.scan_id = s.id
+		INNER JOIN agents a ON s.agent_id = a.id
+	`
+
+	args := []interface{}{}
+	if severityFilter != "" {
+		query += " WHERE f.severity = ?"
+		args = append(args, severityFilter)
+	}
+
+	query += " ORDER BY s.created_at DESC, f.severity DESC"
+
+	if err := database.DB.Raw(query, args...).Scan(&findings).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve findings",
+		})
+	}
+
+	// Always return an empty array instead of null if there are no findings
+	if findings == nil {
+		findings = []UIFinding{}
+	}
+
+	return c.JSON(findings)
 }
