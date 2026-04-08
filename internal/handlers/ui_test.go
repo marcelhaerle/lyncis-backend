@@ -128,6 +128,26 @@ func TestGetAgents(t *testing.T) {
 	}
 	testDB.Create(agent)
 
+	scanID := uuid.New()
+	scan := &models.Scan{
+		ID:             scanID,
+		AgentID:        agentID,
+		HardeningIndex: 85,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-5 * time.Minute),
+	}
+	testDB.Create(scan)
+
+	// An older scan to ensure only the latest is picked
+	olderScan := &models.Scan{
+		ID:             uuid.New(),
+		AgentID:        agentID,
+		HardeningIndex: 40,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-10 * time.Minute),
+	}
+	testDB.Create(olderScan)
+
 	req := httptest.NewRequest("GET", "/api/v1/ui/agents", nil)
 	resp, _ := testApp.Test(req, -1)
 
@@ -145,6 +165,12 @@ func TestGetAgents(t *testing.T) {
 	}
 	if !agents[0].Online {
 		t.Errorf("expected agent to be marked as online")
+	}
+	if agents[0].LatestHardeningIndex == nil || *agents[0].LatestHardeningIndex != 85 {
+		t.Errorf("expected latest_hardening_index to be 85, got %v", agents[0].LatestHardeningIndex)
+	}
+	if agents[0].LatestScanAt == nil {
+		t.Errorf("expected latest_scan_at to not be nil")
 	}
 }
 

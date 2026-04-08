@@ -21,7 +21,16 @@ type DashboardStats struct {
 // UIAgent is a wrapper to append computed properties for an Agent
 type UIAgent struct {
 	models.Agent
-	Online bool `json:"online"`
+	Online               bool       `json:"online"`
+	LatestHardeningIndex *int       `json:"latest_hardening_index"`
+	LatestScanAt         *time.Time `json:"latest_scan_at"`
+}
+
+// agentWithScan is used for mapping the DB query joining agents and their latest scan
+type agentWithScan struct {
+	models.Agent
+	LatestHardeningIndex *int       `gorm:"column:latest_hardening_index"`
+	LatestScanAt         *time.Time `gorm:"column:latest_scan_at"`
 }
 
 // GetDashboard returns aggregated statistics for the UI dashboard
@@ -50,19 +59,34 @@ func GetDashboard(c *fiber.Ctx) error {
 
 // GetAgents returns a list of all agents, including their computed online status
 func GetAgents(c *fiber.Ctx) error {
-	var dbAgents []models.Agent
-	if err := database.DB.Order("created_at desc").Find(&dbAgents).Error; err != nil {
+	var results []agentWithScan
+
+	// Use a LEFT JOIN with a subquery that retrieves the latest scan per agent using DISTINCT ON (agent_id)
+	query := `
+		SELECT agents.*, latest_scans.hardening_index AS latest_hardening_index, latest_scans.created_at AS latest_scan_at
+		FROM agents
+		LEFT JOIN (
+			SELECT DISTINCT ON (agent_id) agent_id, hardening_index, created_at
+			FROM scans
+			ORDER BY agent_id, created_at DESC
+		) latest_scans ON agents.id = latest_scans.agent_id
+		ORDER BY agents.created_at DESC
+	`
+
+	if err := database.DB.Raw(query).Scan(&results).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to retrieve agents",
 		})
 	}
 
 	timeThreshold := time.Now().Add(-3 * time.Minute)
-	uiAgents := make([]UIAgent, len(dbAgents))
-	for i, agent := range dbAgents {
+	uiAgents := make([]UIAgent, len(results))
+	for i, r := range results {
 		uiAgents[i] = UIAgent{
-			Agent:  agent,
-			Online: agent.LastSeen.After(timeThreshold),
+			Agent:                r.Agent,
+			Online:               r.Agent.LastSeen.After(timeThreshold),
+			LatestHardeningIndex: r.LatestHardeningIndex,
+			LatestScanAt:         r.LatestScanAt,
 		}
 	}
 
