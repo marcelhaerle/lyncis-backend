@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+README.md
+BLUEPRINT.md
+docker-compose.yml
+Dockerfile
+.dockerignore
+**/.*_test.go
