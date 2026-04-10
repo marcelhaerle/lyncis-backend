@@ -56,8 +56,8 @@ func main() {
 	uiGroup.Delete("/agents/:agent_id", handlers.DeleteAgent)
 	uiGroup.Post("/agents/:agent_id/scan", handlers.TriggerScan)
 	uiGroup.Get("/agents/:agent_id/scans/latest", handlers.GetLatestScan)
-	uiGroup.Get("/findings", handlers.GetFindings)
-
+	uiGroup.Get("/agents/:agent_id/scans/latest/diff", handlers.GetAgentLatestScanDiff)
+	uiGroup.Get("/agents/:agent_id/scans/history", handlers.GetAgentScanHistory)
 	// Port configuration
 	port := os.Getenv("PORT")
 	if port == "" {

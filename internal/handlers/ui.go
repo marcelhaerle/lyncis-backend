@@ -269,3 +269,122 @@ func DeleteAgent(c *fiber.Ctx) error {
 
 	return c.SendStatus(fiber.StatusNoContent)
 }
+
+// ScanHistoryRecord represents a single point in time for a scan trend
+type ScanHistoryRecord struct {
+	ScanID          uuid.UUID `json:"scan_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	HardeningIndex  int       `json:"hardening_index"`
+	WarningCount    int64     `json:"warning_count"`
+	SuggestionCount int64     `json:"suggestion_count"`
+}
+
+// GetAgentScanHistory returns a lightweight, time-ordered array (oldest to newest) of scan history.
+func GetAgentScanHistory(c *fiber.Ctx) error {
+	agentIDStr := c.Params("agent_id")
+	agentID, err := uuid.Parse(agentIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid agent ID format",
+		})
+	}
+
+	var history []ScanHistoryRecord
+	query := `
+		SELECT 
+			s.id as scan_id, 
+			s.created_at, 
+			s.hardening_index,
+			COUNT(CASE WHEN f.severity = 'warning' THEN 1 END) as warning_count,
+			COUNT(CASE WHEN f.severity = 'suggestion' THEN 1 END) as suggestion_count
+		FROM scans s
+		LEFT JOIN scan_findings f ON s.id = f.scan_id
+		WHERE s.agent_id = ?
+		GROUP BY s.id, s.created_at, s.hardening_index
+		ORDER BY s.created_at ASC
+	`
+
+	if err := database.DB.Raw(query, agentID).Scan(&history).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve scan history",
+		})
+	}
+
+	if history == nil {
+		history = []ScanHistoryRecord{}
+	}
+
+	return c.JSON(history)
+}
+
+// GetAgentLatestScanDiff compares the latest scan findings with the previous scan findings
+func GetAgentLatestScanDiff(c *fiber.Ctx) error {
+	agentIDStr := c.Params("agent_id")
+	agentID, err := uuid.Parse(agentIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid agent ID format",
+		})
+	}
+
+	var scans []models.Scan
+	result := database.DB.Preload("Findings").Where("agent_id = ?", agentID).Order("created_at desc").Limit(2).Find(&scans)
+	if result.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve scans",
+		})
+	}
+
+	// Always ensure empty slices aren't rendered as null in JSON
+	newIssues := []models.ScanFinding{}
+	resolvedIssues := []models.ScanFinding{}
+	unchangedIssues := []models.ScanFinding{}
+
+	if len(scans) == 2 {
+		latestScan := scans[0]
+		previousScan := scans[1]
+
+		prevFindings := make(map[string]models.ScanFinding)
+		for _, f := range previousScan.Findings {
+			prevFindings[f.TestID] = f
+		}
+
+		latestTestIDs := make(map[string]bool)
+		for _, f := range latestScan.Findings {
+			latestTestIDs[f.TestID] = true
+			if _, exists := prevFindings[f.TestID]; exists {
+				unchangedIssues = append(unchangedIssues, f)
+			} else {
+				newIssues = append(newIssues, f)
+			}
+		}
+
+		for testID, f := range prevFindings {
+			if !latestTestIDs[testID] {
+				resolvedIssues = append(resolvedIssues, f)
+			}
+		}
+	} else if len(scans) == 1 {
+		// If there is only 1 scan, everything is a "new issue"
+		for _, f := range scans[0].Findings {
+			newIssues = append(newIssues, f)
+		}
+	}
+
+	// Null safety for arrays returned to avoid generic react-query crashes
+	if newIssues == nil {
+		newIssues = []models.ScanFinding{}
+	}
+	if resolvedIssues == nil {
+		resolvedIssues = []models.ScanFinding{}
+	}
+	if unchangedIssues == nil {
+		unchangedIssues = []models.ScanFinding{}
+	}
+
+	return c.JSON(fiber.Map{
+		"new_issues":       newIssues,
+		"resolved_issues":  resolvedIssues,
+		"unchanged_issues": unchangedIssues,
+	})
+}

@@ -439,3 +439,179 @@ func TestDeleteAgent(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
 	}
 }
+
+func TestGetAgentScanHistory(t *testing.T) {
+	testDB.Exec("TRUNCATE TABLE scan_findings, scans, tasks, agents RESTART IDENTITY CASCADE")
+
+	agentID := uuid.New()
+	testDB.Create(&models.Agent{
+		ID:            agentID,
+		Hostname:      "history-agent",
+		AuthTokenHash: "hash-history",
+	})
+
+	scan1ID := uuid.New()
+	scan2ID := uuid.New()
+
+	testDB.Create(&models.Scan{
+		ID:             scan1ID,
+		AgentID:        agentID,
+		HardeningIndex: 50,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-2 * time.Hour),
+	})
+
+	testDB.Create(&models.Scan{
+		ID:             scan2ID,
+		AgentID:        agentID,
+		HardeningIndex: 75,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-1 * time.Hour),
+	})
+
+	// Add findings for first scan
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   scan1ID,
+		AgentID:  agentID,
+		Severity: "warning",
+		TestID:   "T1",
+	})
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   scan1ID,
+		AgentID:  agentID,
+		Severity: "suggestion",
+		TestID:   "T2",
+	})
+
+	// Add findings for second scan
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   scan2ID,
+		AgentID:  agentID,
+		Severity: "warning",
+		TestID:   "T3",
+	})
+
+	req := httptest.NewRequest("GET", "/api/v1/ui/agents/"+agentID.String()+"/scans/history", nil)
+	resp, err := testApp.Test(req, -1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var history []handlers.ScanHistoryRecord
+	if err := json.NewDecoder(resp.Body).Decode(&history); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(history) != 2 {
+		t.Fatalf("expected 2 history records, got %d", len(history))
+	}
+
+	if history[0].HardeningIndex != 50 || history[0].WarningCount != 1 || history[0].SuggestionCount != 1 {
+		t.Errorf("incorrect stats for oldest scan: %+v", history[0])
+	}
+	if history[1].HardeningIndex != 75 || history[1].WarningCount != 1 || history[1].SuggestionCount != 0 {
+		t.Errorf("incorrect stats for newest scan: %+v", history[1])
+	}
+}
+
+func TestGetAgentLatestScanDiff(t *testing.T) {
+	testDB.Exec("TRUNCATE TABLE scan_findings, scans, tasks, agents RESTART IDENTITY CASCADE")
+
+	agentID := uuid.New()
+	testDB.Create(&models.Agent{
+		ID:            agentID,
+		Hostname:      "diff-agent",
+		AuthTokenHash: "hash-diff",
+	})
+
+	oldScanID := uuid.New()
+	newScanID := uuid.New()
+
+	testDB.Create(&models.Scan{
+		ID:             oldScanID,
+		AgentID:        agentID,
+		HardeningIndex: 40,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-1 * time.Hour),
+	})
+
+	testDB.Create(&models.Scan{
+		ID:             newScanID,
+		AgentID:        agentID,
+		HardeningIndex: 60,
+		RawData:        "{}",
+		CreatedAt:      time.Now(),
+	})
+
+	// Old scan has A and B
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   oldScanID,
+		AgentID:  agentID,
+		Severity: "warning",
+		TestID:   "ISSUE-A",
+	})
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   oldScanID,
+		AgentID:  agentID,
+		Severity: "suggestion",
+		TestID:   "ISSUE-B",
+	})
+
+	// New scan has B (unchanged) and C (new)
+	// Therefore A should be resolved
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   newScanID,
+		AgentID:  agentID,
+		Severity: "suggestion",
+		TestID:   "ISSUE-B",
+	})
+	testDB.Create(&models.ScanFinding{
+		ID:       uuid.New(),
+		ScanID:   newScanID,
+		AgentID:  agentID,
+		Severity: "warning",
+		TestID:   "ISSUE-C",
+	})
+
+	req := httptest.NewRequest("GET", "/api/v1/ui/agents/"+agentID.String()+"/scans/latest/diff", nil)
+	resp, err := testApp.Test(req, -1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var diffResult struct {
+		NewIssues       []models.ScanFinding `json:"new_issues"`
+		ResolvedIssues  []models.ScanFinding `json:"resolved_issues"`
+		UnchangedIssues []models.ScanFinding `json:"unchanged_issues"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&diffResult); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(diffResult.NewIssues) != 1 || diffResult.NewIssues[0].TestID != "ISSUE-C" {
+		t.Errorf("expected 1 new issue (ISSUE-C), got %v", diffResult.NewIssues)
+	}
+
+	if len(diffResult.ResolvedIssues) != 1 || diffResult.ResolvedIssues[0].TestID != "ISSUE-A" {
+		t.Errorf("expected 1 resolved issue (ISSUE-A), got %v", diffResult.ResolvedIssues)
+	}
+
+	if len(diffResult.UnchangedIssues) != 1 || diffResult.UnchangedIssues[0].TestID != "ISSUE-B" {
+		t.Errorf("expected 1 unchanged issue (ISSUE-B), got %v", diffResult.UnchangedIssues)
+	}
+}

@@ -221,3 +221,26 @@ Create unit and integration tests where possible. Document the code and implemen
   2. **Confirmation Modal:** Create a custom modal dialog (styled in the Sci-Fi theme) that intercepts the button click. It must clearly warn the user: "Are you sure? This will permanently delete the agent [Hostname] and all its historical scan data. This action cannot be undone."
   3. **Action & Routing:** Upon confirmation, send the `DELETE` request via the Axios client.
   4. **Feedback:** On a successful response, display a success toast notification ("Agent deleted successfully") and immediately use React Router to redirect the user back to the /`agents` list view.
+
+#### Feature 13: Agent Scan History & Delta (Diff) Analysis (v1.0 Capstone)
+
+* **Repository:** `lyncis-backend` & `lyncis-ui`
+* **Goal:** Visualize historical trends of an agent's security posture over time and provide a direct comparison (diff) between the latest scan and the previous scan to highlight resolved and newly introduced issues.
+* **Backend Tasks:**
+  1. **Trend Endpoint:** Create `GET /api/v1/ui/agents/{agent_id}/scans/history`.
+      * **Logic:** Return a lightweight, time-ordered array (oldest to newest) containing `scan_id`, `created_at`, `hardening_index`, `warning_count`, and `suggestion_count`. Use SQL aggregation to calculate the counts efficiently without loading the `raw_data`.
+  2. **Diff Endpoint:** Create `GET /api/v1/ui/agents/{agent_id}/scans/latest/diff`.
+      * **Logic:** Fetch the `scan_findings` for the two most recent scans of the agent. Compare the `test_id` arrays.
+      * **Return Payload:** `{ "new_issues": [...], "resolved_issues": [...], "unchanged_issues": [...] }`.
+      * **New:** Present in the latest scan, missing in the previous.
+      * **Resolved:** Present in the previous scan, missing in the latest.
+* **UI Tasks:**
+  1. **Tabbed Interface:** Refactor the `/agents/:agentId/report` view to use a tabbed layout: "Current Findings" and "History & Trends".
+  2. **Trend Visualization:** In the "History" tab, use `recharts` to render a responsive Line Chart.
+      * **X-Axis:** Scan date/time.
+      * **Y-Axis (Left):** Hardening Index (Scale 0-100, styled with a glowing cyan line).
+      * **Y-Axis (Right):** Warning Count (Scale based on data, styled with a red dashed line).
+  3. **Delta Panel (The "Diff"):** Below the chart, build a "Changes Since Last Scan" panel.
+      * Create a section for **Resolved Warnings** (styled with a green `#10b981` success theme and a strikethrough effect on the description).
+      * Create a section for New Warnings (styled with an aggressive red `#ef4444` theme to draw immediate attention).
+      * If the diff payload is completely empty (no changes), show a Sci-Fi themed "No state changes detected" placeholder.
