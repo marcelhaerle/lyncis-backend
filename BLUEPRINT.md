@@ -207,3 +207,17 @@ Create unit and integration tests where possible. Document the code and implemen
       * Set `disabled={agent.activity_status !== 'idle'}`.
       * Apply styling changes (e.g., lower opacity, cursor-not-allowed) when disabled.
   3. **Tooltip/Feedback:** Add a tooltip over the disabled button that explains: *"A scan is already scheduled or in progress for this agent."*
+
+#### Feature 12: Agent Deletion & Data Cleanup
+
+* **Repository:** `lyncis-backend` & `lyncis-ui`
+* **Goal:** Allow users to permanently delete an agent. This must trigger a cascading delete of all associated tasks, scans, and findings to prevent database bloat and orphaned records.
+* **Backend Tasks:**
+  1. **Database Constraints Verification:** Update the GORM models to ensure strict `OnDelete:CASCADE` constraints. When an Agent is deleted, PostgreSQL must automatically drop the corresponding records in the `tasks` and `scans` tables. (Note: `scan_findings` should already cascade from `scans`, but verify this).
+  2. **New Endpoint:** Create `DELETE /api/v1/ui/agents/{agent_id}`.
+  3. **Logic:** Attempt to find the agent by UUID. If it does not exist, return `404 Not Found`. If it exists, execute a delete operation. Return `204 No Content` on success.
+* **UI Tasks:**
+  1. **Button Placement:** On the agent report/detail view (`/agents/:agentId/report`), add a "Delete Agent" button in the top header action area. Style this button destructively (e.g., a dark button with a red `#ef4444` border and hover state) to distinguish it from safe actions.
+  2. **Confirmation Modal:** Create a custom modal dialog (styled in the Sci-Fi theme) that intercepts the button click. It must clearly warn the user: "Are you sure? This will permanently delete the agent [Hostname] and all its historical scan data. This action cannot be undone."
+  3. **Action & Routing:** Upon confirmation, send the `DELETE` request via the Axios client.
+  4. **Feedback:** On a successful response, display a success toast notification ("Agent deleted successfully") and immediately use React Router to redirect the user back to the /`agents` list view.

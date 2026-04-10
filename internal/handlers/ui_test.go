@@ -398,3 +398,44 @@ func TestGetFindings(t *testing.T) {
 		}
 	})
 }
+
+func TestDeleteAgent(t *testing.T) {
+	testDB.Exec("TRUNCATE TABLE scan_findings, scans, tasks, agents RESTART IDENTITY CASCADE")
+
+	// 1. Create agent
+	agentID := uuid.New()
+	testDB.Exec("INSERT INTO agents (id, hostname, os_info, status, last_seen, auth_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		agentID, "delete-agent", "OS", "online", time.Now(), "hash", time.Now(), time.Now())
+
+	// Test case: Agent exists
+	req := httptest.NewRequest("DELETE", "/api/v1/ui/agents/"+agentID.String(), nil)
+	resp, _ := testApp.Test(req, -1)
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("Expected status %d, got %d", http.StatusNoContent, resp.StatusCode)
+	}
+
+	// Verify agent was deleted
+	var count int64
+	testDB.Model(&models.Agent{}).Where("id = ?", agentID).Count(&count)
+	if count != 0 {
+		t.Errorf("Expected 0 agents, found %d", count)
+	}
+
+	// Test case: Agent does not exist
+	nonExistentID := uuid.New().String()
+	req = httptest.NewRequest("DELETE", "/api/v1/ui/agents/"+nonExistentID, nil)
+	resp, _ = testApp.Test(req, -1)
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("Expected status %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+
+	// Test case: Invalid UUID format
+	req = httptest.NewRequest("DELETE", "/api/v1/ui/agents/invalid-id", nil)
+	resp, _ = testApp.Test(req, -1)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
+	}
+}

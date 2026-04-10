@@ -14,6 +14,9 @@ type Scan struct {
 	RawData        string        `gorm:"type:jsonb" json:"raw_data"`
 	CreatedAt      time.Time     `json:"created_at"`
 	Findings       []ScanFinding `gorm:"foreignKey:ScanID;constraint:OnDelete:CASCADE;" json:"findings"`
+
+	// Relationships
+	Agent Agent `gorm:"foreignKey:AgentID;constraint:OnDelete:CASCADE;" json:"-"`
 }
 
 // ScanFinding represents a specific warning or suggestion from a scan.
@@ -24,4 +27,8 @@ type ScanFinding struct {
 	Severity    string    `json:"severity"` // 'warning', 'suggestion'
 	TestID      string    `json:"test_id"`  // e.g. "SSH-7408"
 	Description string    `json:"description"`
+
+	// Relationships
+	Scan  Scan  `gorm:"foreignKey:ScanID;constraint:OnDelete:CASCADE;" json:"-"`
+	Agent Agent `gorm:"foreignKey:AgentID;constraint:OnDelete:CASCADE;" json:"-"`
 }

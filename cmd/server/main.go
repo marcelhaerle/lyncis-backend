@@ -53,6 +53,7 @@ func main() {
 	uiGroup := api.Group("/ui")
 	uiGroup.Get("/dashboard", handlers.GetDashboard)
 	uiGroup.Get("/agents", handlers.GetAgents)
+	uiGroup.Delete("/agents/:agent_id", handlers.DeleteAgent)
 	uiGroup.Post("/agents/:agent_id/scan", handlers.TriggerScan)
 	uiGroup.Get("/agents/:agent_id/scans/latest", handlers.GetLatestScan)
 	uiGroup.Get("/findings", handlers.GetFindings)

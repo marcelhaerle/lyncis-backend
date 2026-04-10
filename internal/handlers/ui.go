@@ -242,3 +242,30 @@ func GetFindings(c *fiber.Ctx) error {
 
 	return c.JSON(findings)
 }
+
+// DeleteAgent deletes an agent and all associated tasks, scans, and findings due to CASCADE.
+func DeleteAgent(c *fiber.Ctx) error {
+	agentIDStr := c.Params("agent_id")
+	agentID, err := uuid.Parse(agentIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid agent ID format",
+		})
+	}
+
+	// Check if agent exists and delete
+	result := database.DB.Where("id = ?", agentID).Delete(&models.Agent{})
+	if result.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to delete agent",
+		})
+	}
+
+	if result.RowsAffected == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Agent not found",
+		})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
