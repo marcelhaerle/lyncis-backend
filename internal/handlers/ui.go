@@ -50,7 +50,15 @@ func GetDashboard(c *fiber.Ctx) error {
 	var avgHardening struct {
 		Avg float64
 	}
-	database.DB.Model(&models.Scan{}).Select("COALESCE(AVG(hardening_index), 0) as avg").Scan(&avgHardening)
+	avgQuery := `
+		SELECT COALESCE(AVG(hardening_index), 0) as avg
+		FROM (
+			SELECT DISTINCT ON (agent_id) hardening_index
+			FROM scans
+			ORDER BY agent_id, created_at DESC
+		) latest_scans
+	`
+	database.DB.Raw(avgQuery).Scan(&avgHardening)
 	stats.AvgHardeningIndex = math.Round(avgHardening.Avg)
 
 	// Critical Warnings count from latest scans

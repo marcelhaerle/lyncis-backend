@@ -21,6 +21,7 @@ func TestGetDashboard(t *testing.T) {
 	agent2ID := uuid.New()
 	scan1ID := uuid.New()
 	scan2ID := uuid.New()
+	scan3ID := uuid.New()
 
 	// Seed agents
 	// Agent 1: online (last seen now)
@@ -61,8 +62,17 @@ func TestGetDashboard(t *testing.T) {
 		RawData:        "{}",
 		CreatedAt:      time.Now(),
 	}
+	// Scan 3 (older scan for agent 1): hardening 20 (Should be ignored in average since scan1 is newer)
+	scan3 := &models.Scan{
+		ID:             scan3ID,
+		AgentID:        agent1ID,
+		HardeningIndex: 20,
+		RawData:        "{}",
+		CreatedAt:      time.Now().Add(-10 * time.Minute),
+	}
 	testDB.Create(scan1)
 	testDB.Create(scan2)
+	testDB.Create(scan3)
 
 	// Critical warning for Scan 1
 	finding1 := &models.ScanFinding{
