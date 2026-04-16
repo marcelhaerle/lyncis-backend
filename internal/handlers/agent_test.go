@@ -179,11 +179,6 @@ func TestRegisterAgent_Conflict(t *testing.T) {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusConflict {
-		t.Errorf("Expected status %d, got %d", fiber.StatusConflict, resp.StatusCode)
-	}
-}
-
-	if resp.StatusCode != fiber.StatusConflict {
 		t.Errorf("Expected status %d (Conflict) due to Trust On First Use, got %d", fiber.StatusConflict, resp.StatusCode)
 	}
 }
