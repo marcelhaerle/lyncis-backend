@@ -1,66 +1,52 @@
-# lyncis-backend
+# Lyncis Backend
 
-The REST API backend for the Lyncis Security Platform. It receives audit data from `lyncis-agent` instances running on managed hosts, stores results in PostgreSQL, and exposes endpoints for the `lyncis-ui` dashboard.
+The core API for the Lyncis Security Platform. It manages agent registration, task dispatching, and audit report ingestion, serving as the bridge between distributed agents and the React dashboard.
 
-Built with **Go**, **Fiber v2**, and **GORM**.
+Built with **Go**, **Fiber v2**, and **GORM** (PostgreSQL).
 
 ---
 
-## Prerequisites
+## Getting Started
 
-- Go 1.21+
-- Docker & Docker Compose (for the local database)
+### Prerequisites
+- [Go 1.21+](https://go.dev/doc/install)
+- [Docker & Docker Compose](https://docs.docker.com/compose/)
 
-## Developer Setup
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/marcelhaerle/lyncis-backend.git
-cd lyncis-backend
-```
-
-### 2. Install dependencies
-
-```bash
-go mod download
-```
-
-### 3. Start the database
-
-Spin up a PostgreSQL instance using Docker Compose:
-
+### 1. Local Development
+Start the PostgreSQL container:
 ```bash
 docker compose up -d
 ```
 
-Then export the connection string:
-
+Set the connection string:
 ```bash
 export DATABASE_URL="postgres://lyncis:lyncis@localhost:5432/lyncis?sslmode=disable"
 ```
 
-To stop the database: `docker compose down`. Add `-v` to also remove the persisted volume.
-
-### 4. Run the server
-
+Run the server:
 ```bash
 go run ./cmd/server
 ```
 
-The server starts on `http://localhost:3000` by default. Database tables are created automatically via GORM AutoMigrate on startup.
+---
+
+## Architecture & Logic
+- **TOFU Registration:** New agents are automatically registered on first contact.
+- **Token Security:** Authentication tokens are stored as SHA256 hashes in the DB for security.
+- **Database:** Auto-migrates on startup.
 
 ## Project Structure
+- `cmd/server/`: Application entrypoint.
+- `internal/handlers/`: API endpoint logic (Fiber).
+- `internal/middleware/`: Security and auth layers.
+- `internal/models/`: GORM database schema definitions.
 
-```text
-cmd/server/       # Application entrypoint
-internal/
-  handlers/       # Fiber route handlers
-  models/         # GORM models (Agent, Task, Scan, ScanFinding)
-  middleware/     # Token authentication middleware
-```
+## Configuration (Environment Variables)
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `PORT` | API server port | `3000` |
+| `DATABASE_URL` | PostgreSQL connection string | Required |
 
 ## Related Repositories
-
-- [`lyncis-agent`](https://github.com/marcelhaerle/lyncis-agent) — Go binary deployed on managed hosts
-- [`lyncis-ui`](https://github.com/marcelhaerle/lyncis-ui) — React dashboard
+- [`lyncis-agent`](https://github.com/marcelhaerle/lyncis-agent)
+- [`lyncis-ui`](https://github.com/marcelhaerle/lyncis-ui)
