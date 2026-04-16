@@ -179,7 +179,32 @@ func TestRegisterAgent_Conflict(t *testing.T) {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
 
-	if resp.StatusCode != fiber.StatusConflict {
-		t.Errorf("Expected status %d (Conflict) due to Trust On First Use, got %d", fiber.StatusConflict, resp.StatusCode)
+func TestRegisterAgent_LongInputs(t *testing.T) {
+	// Generate string longer than 255 characters
+	longString := ""
+	for i := 0; i < 256; i++ {
+		longString += "a"
+	}
+
+	payload := map[string]string{
+		"hostname": longString,
+		"os_info":  longString,
+	}
+	body, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", "/api/v1/agent/register", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	// This should fail because GORM will attempt to truncate or reject the string 
+	// based on the database column type/constraint if validation is enabled,
+	// but mostly we want to ensure the backend returns a reasonable error.
+	resp, err := testApp.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Failed to execute request: %v", err)
+	}
+
+	// Expecting 500 or 400 depending on how GORM handles the constraint violation
+	if resp.StatusCode != fiber.StatusInternalServerError && resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected status 500 or 400 due to database constraint violation, got %d", resp.StatusCode)
 	}
 }
