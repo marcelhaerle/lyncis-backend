@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -65,8 +67,22 @@ func main() {
 		port = "3000"
 	}
 
-	log.Printf("Starting lyncis-backend server on :%s...", port)
-	if err := app.Listen(":" + port); err != nil {
-		log.Fatalf("Server shutdown with error: %v", err)
+	// Start server in a goroutine
+	go func() {
+		if err := app.Listen(":" + port); err != nil {
+			log.Fatalf("Server shutdown with error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	<-c // Wait for signal
+	log.Println("Gracefully shutting down...")
+	if err := app.Shutdown(); err != nil {
+		log.Fatalf("Error during shutdown: %v", err)
 	}
+
+	log.Println("Server exited properly.")
 }
