@@ -68,18 +68,22 @@ func main() {
 	}
 
 	// Start server in a goroutine
+	errCh := make(chan error, 1)
 	go func() {
-		if err := app.Listen(":" + port); err != nil {
-			log.Fatalf("Server shutdown with error: %v", err)
-		}
+		errCh <- app.Listen(":" + port)
 	}()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal or listen error
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
-	<-c // Wait for signal
-	log.Println("Gracefully shutting down...")
+	select {
+	case <-c:
+		log.Println("Gracefully shutting down...")
+	case err := <-errCh:
+		log.Fatalf("Server startup failed: %v", err)
+	}
+
 	if err := app.Shutdown(); err != nil {
 		log.Fatalf("Error during shutdown: %v", err)
 	}
