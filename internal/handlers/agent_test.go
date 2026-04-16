@@ -178,6 +178,10 @@ func TestRegisterAgent_Conflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Errorf("Expected status %d, got %d", fiber.StatusConflict, resp.StatusCode)
+	}
+}
 
 func TestRegisterAgent_LongInputs(t *testing.T) {
 	// Generate string longer than 255 characters
@@ -195,7 +199,7 @@ func TestRegisterAgent_LongInputs(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/api/v1/agent/register", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	// This should fail because GORM will attempt to truncate or reject the string 
+	// This should fail because GORM will attempt to truncate or reject the string
 	// based on the database column type/constraint if validation is enabled,
 	// but mostly we want to ensure the backend returns a reasonable error.
 	resp, err := testApp.Test(req, -1)
