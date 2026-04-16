@@ -183,6 +183,11 @@ func TestRegisterAgent_Conflict(t *testing.T) {
 	}
 }
 
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Errorf("Expected status %d (Conflict) due to Trust On First Use, got %d", fiber.StatusConflict, resp.StatusCode)
+	}
+}
+
 func TestRegisterAgent_LongInputs(t *testing.T) {
 	// Generate string longer than 255 characters
 	longString := ""
