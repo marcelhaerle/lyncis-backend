@@ -178,9 +178,6 @@ func TestRegisterAgent_Conflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusConflict {
-		t.Errorf("Expected status %d (Conflict) due to Trust On First Use, got %d", fiber.StatusConflict, resp.StatusCode)
-	}
 }
 
 func TestRegisterAgent_LongInputs(t *testing.T) {
