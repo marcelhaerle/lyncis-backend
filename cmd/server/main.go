@@ -69,6 +69,7 @@ func main() {
 
 	// Start server in a goroutine
 	errCh := make(chan error, 1)
+	log.Printf("Starting lyncis-backend server on :%s...", port)
 	go func() {
 		errCh <- app.Listen(":" + port)
 	}()
